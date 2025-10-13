@@ -18,8 +18,9 @@ from legged_gym.utils.math import (
 )
 from .pointfoot_flat_config import BipedCfgPF
 
+
 class BipedPF(BaseTask):
-    
+
     def __init__(
         self, cfg: BipedCfgPF, sim_params, physics_engine, sim_device, headless
     ):
@@ -73,7 +74,8 @@ class BipedPF(BaseTask):
             )
             self.envs_steps_buf += 1
             self.torques = self._compute_torques(
-                self.action_fifo[torch.arange(self.num_envs), self.action_delay_idx, :]
+                self.action_fifo[torch.arange(
+                    self.num_envs), self.action_delay_idx, :]
             ).view(self.torques.shape)
             self.gym.set_dof_actuation_force_tensor(
                 self.sim, gymtorch.unwrap_tensor(self.torques)
@@ -97,7 +99,7 @@ class BipedPF(BaseTask):
             self.extras,
             self.obs_history,
             self.commands[:, :3] * self.commands_scale,
-            self.critic_obs_buf # make sure critic_obs update in every for loop
+            self.critic_obs_buf  # make sure critic_obs update in every for loop
         )
 
     def _resample_commands(self, env_ids):
@@ -176,13 +178,15 @@ class BipedPF(BaseTask):
         control_type = self.cfg.control.control_type
         if control_type == "P":
             torques = (
-                self.p_gains * (actions_scaled + self.default_dof_pos - self.dof_pos)
+                self.p_gains * (actions_scaled +
+                                self.default_dof_pos - self.dof_pos)
                 - self.d_gains * self.dof_vel
             )
         elif control_type == "V":
             torques = (
                 self.p_gains * (actions_scaled - self.dof_vel)
-                - self.d_gains * (self.dof_vel - self.last_dof_vel) / self.sim_params.dt
+                - self.d_gains *
+                (self.dof_vel - self.last_dof_vel) / self.sim_params.dt
             )
         elif control_type == "T":
             torques = actions_scaled
@@ -218,7 +222,7 @@ class BipedPF(BaseTask):
         )
         noise_vec[18:] = 0.0  # previous actions
         return noise_vec
-    
+
     def reset_idx(self, env_ids):
         """Reset some environments.
             Calls self._reset_dofs(env_ids), self._reset_root_states(env_ids), and self._resample_commands(env_ids)
@@ -236,7 +240,8 @@ class BipedPF(BaseTask):
             self._update_terrain_curriculum(env_ids)
         # avoid updating command curriculum at each step since the maximum command is common to all envs
         if self.cfg.commands.curriculum:
-            time_out_env_ids = self.time_out_buf.nonzero(as_tuple=False).flatten()
+            time_out_env_ids = self.time_out_buf.nonzero(
+                as_tuple=False).flatten()
             self.update_command_curriculum(time_out_env_ids)
 
         # reset robot states
@@ -257,7 +262,8 @@ class BipedPF(BaseTask):
         self.reset_buf[env_ids] = 1
         self.obs_history[env_ids] = 0
         obs_buf, _ = self.compute_group_observations()
-        self.obs_history[env_ids] = obs_buf[env_ids].repeat(1, self.obs_history_length)
+        self.obs_history[env_ids] = obs_buf[env_ids].repeat(
+            1, self.obs_history_length)
         self.gait_indices[env_ids] = 0
         self.fail_buf[env_ids] = 0
         self.action_fifo[env_ids] = 0
@@ -266,7 +272,8 @@ class BipedPF(BaseTask):
         self.extras["episode"] = {}
         for key in self.episode_sums.keys():
             self.extras["episode"]["rew_" + key] = (
-                torch.mean(self.episode_sums[key][env_ids]) / self.max_episode_length_s
+                torch.mean(self.episode_sums[key]
+                           [env_ids]) / self.max_episode_length_s
             )
             self.episode_sums[key][env_ids] = 0.0
         # log additional curriculum info
@@ -279,32 +286,48 @@ class BipedPF(BaseTask):
             )
         if self.cfg.terrain.curriculum and self.cfg.commands.curriculum:
             self.extras["episode"]["max_command_x"] = torch.mean(
-                self.command_ranges["lin_vel_x"][self.smooth_slope_idx, 1].float()
+                self.command_ranges["lin_vel_x"][self.smooth_slope_idx, 1].float(
+                )
             )
         # send timeout info to the algorithm
         if self.cfg.env.send_timeouts:
             self.extras["time_outs"] = self.time_out_buf | self.edge_reset_buf
 
+
     def compute_group_observations(self):
-        # note that observation noise need to modified accordingly !!!
+    # 基础观测 (30维)
         obs_buf = torch.cat(
             (
-                self.base_ang_vel * self.obs_scales.ang_vel,
-                self.projected_gravity,
-                (self.dof_pos - self.default_dof_pos) * self.obs_scales.dof_pos,
-                self.dof_vel * self.obs_scales.dof_vel,
-                self.actions,
-                self.clock_inputs_sin.view(self.num_envs, 1),
-                self.clock_inputs_cos.view(self.num_envs, 1),
-                self.gaits,
+                self.base_ang_vel * self.obs_scales.ang_vel,  # 3维
+                self.projected_gravity,  # 3维
+                (self.dof_pos - self.default_dof_pos) *
+                self.obs_scales.dof_pos,  # 6维
+                self.dof_vel * self.obs_scales.dof_vel,  # 6维
+                self.actions,  # 6维
+                self.clock_inputs_sin.view(self.num_envs, 1),  # 1维
+                self.clock_inputs_cos.view(self.num_envs, 1),  # 1维
+                self.gaits,  # 4维
             ),
             dim=-1,
         )
+
+        # 如果启用地形测量，添加地形信息
+        if self.cfg.terrain.measure_heights:
+            heights = torch.clip(
+                self.root_states[:, 2].unsqueeze(1) - 0.5 - self._get_heights(),
+                -1, 1
+            ) * self.obs_scales.height_measurements
+            obs_buf = torch.cat((obs_buf, heights), dim=-1)  # 30 + 117 = 147维
+
+        # 评论者观测：只添加base_lin_vel，不重复添加地形信息
         critic_obs_buf = torch.cat((
-            self.base_lin_vel * self.obs_scales.lin_vel, self.obs_buf), dim=-1)
+            self.base_lin_vel * self.obs_scales.lin_vel,  # 3维
+            obs_buf  # 147维
+        ), dim=-1)  # 总共150维
+
         return obs_buf, critic_obs_buf
-    
     # --------------------------- reward functions---------------------------
+
     def _reward_lin_vel_z(self):
         # Penalize z axis base linear velocity
         return torch.square(self.base_lin_vel[:, 2])
@@ -320,7 +343,8 @@ class BipedPF(BaseTask):
 
     def _reward_base_height(self):
         # Penalize base height away from target
-        base_height = torch.mean(self.root_states[:, 2].unsqueeze(1) - self.measured_heights, dim=1)
+        base_height = torch.mean(self.root_states[:, 2].unsqueeze(
+            1) - self.measured_heights, dim=1)
         return torch.square(base_height - self.cfg.rewards.base_height_target)
 
     def _reward_torques(self):
@@ -347,8 +371,11 @@ class BipedPF(BaseTask):
 
     def _reward_dof_pos_limits(self):
         # Penalize dof positions too close to the limit
-        out_of_limits = -(self.dof_pos - self.dof_pos_limits[:, 0]).clip(max=0.0)  # lower limit
-        out_of_limits += (self.dof_pos - self.dof_pos_limits[:, 1]).clip(min=0.0)
+        out_of_limits = - \
+            (self.dof_pos -
+             self.dof_pos_limits[:, 0]).clip(max=0.0)  # lower limit
+        out_of_limits += (self.dof_pos -
+                          self.dof_pos_limits[:, 1]).clip(min=0.0)
         return torch.sum(out_of_limits, dim=1)
 
     def _reward_tracking_lin_vel(self):
@@ -360,11 +387,13 @@ class BipedPF(BaseTask):
 
     def _reward_tracking_ang_vel(self):
         # Tracking of angular velocity commands (yaw)
-        ang_vel_error = torch.square(self.commands[:, 2] - self.base_ang_vel[:, 2])
+        ang_vel_error = torch.square(
+            self.commands[:, 2] - self.base_ang_vel[:, 2])
         return torch.exp(-ang_vel_error / self.cfg.rewards.ang_tracking_sigma)
 
     def _reward_tracking_contacts_shaped_force(self):
-        foot_forces = torch.norm(self.contact_forces[:, self.feet_indices, :], dim=-1)
+        foot_forces = torch.norm(
+            self.contact_forces[:, self.feet_indices, :], dim=-1)
         desired_contact = self.desired_contact_states
 
         reward = 0
@@ -386,7 +415,8 @@ class BipedPF(BaseTask):
         if self.reward_scales["tracking_contacts_shaped_vel"] > 0:
             for i in range(len(self.feet_indices)):
                 reward += desired_contact[:, i] * torch.exp(
-                    -foot_velocities[:, i] ** 2 / self.cfg.rewards.gait_vel_sigma
+                    -foot_velocities[:, i] ** 2 /
+                    self.cfg.rewards.gait_vel_sigma
                 )
         else:
             for i in range(len(self.feet_indices)):
@@ -396,8 +426,10 @@ class BipedPF(BaseTask):
 
     def _reward_feet_distance(self):
         # Penalize base height away from target
-        feet_distance = torch.norm(self.foot_positions[:, 0, :2] - self.foot_positions[:, 1, :2], dim=-1)
-        reward = torch.clip(self.cfg.rewards.min_feet_distance - feet_distance, 0, 1)
+        feet_distance = torch.norm(
+            self.foot_positions[:, 0, :2] - self.foot_positions[:, 1, :2], dim=-1)
+        reward = torch.clip(
+            self.cfg.rewards.min_feet_distance - feet_distance, 0, 1)
         return reward
 
     def _reward_feet_regulation(self):
@@ -414,7 +446,9 @@ class BipedPF(BaseTask):
     def _reward_foot_landing_vel(self):
         z_vels = self.foot_velocities[:, :, 2]
         contacts = self.contact_forces[:, self.feet_indices, 2] > 0.1
-        about_to_land = (self.foot_heights < self.cfg.rewards.about_landing_threshold) & (~contacts) & (z_vels < 0.0)
-        landing_z_vels = torch.where(about_to_land, z_vels, torch.zeros_like(z_vels))
+        about_to_land = (self.foot_heights < self.cfg.rewards.about_landing_threshold) & (
+            ~contacts) & (z_vels < 0.0)
+        landing_z_vels = torch.where(
+            about_to_land, z_vels, torch.zeros_like(z_vels))
         reward = torch.sum(torch.square(landing_z_vels), dim=1)
         return reward

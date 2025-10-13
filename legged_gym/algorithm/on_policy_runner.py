@@ -61,9 +61,16 @@ class OnPolicyRunner:
         if self.alg_cfg["critic_take_latent"]:
             num_critic_obs += encoder.num_output_dim
 
+        # Calculate actor input dimension (includes height measurements if enabled)
+        num_actor_obs = self.env.num_obs  # 36 proprioceptive
+        actor_use_heights = getattr(self.env.cfg.env, 'actor_use_heights', False)
+        if actor_use_heights and hasattr(self.env.cfg.terrain, 'measure_heights') and self.env.cfg.terrain.measure_heights:
+            if hasattr(self.env.cfg.env, 'num_height_samples'):
+                num_actor_obs += self.env.cfg.env.num_height_samples  # + 117 heights = 153
+
         actor_critic_class = eval(self.cfg["policy_class_name"])  # ActorCritic
         actor_critic: ActorCritic = actor_critic_class(
-            self.env.num_obs
+            num_actor_obs
             + encoder.num_output_dim
             + self.env.num_commands,
             num_critic_obs,
@@ -77,6 +84,7 @@ class OnPolicyRunner:
             encoder,
             actor_critic,
             device=self.device,
+            actor_use_heights=actor_use_heights,
             **self.alg_cfg,
         )
 
@@ -84,10 +92,16 @@ class OnPolicyRunner:
         self.save_interval = self.cfg["save_interval"]
 
         # init storage and model
+        # Determine full observation size (may include height measurements)
+        obs_dim_for_storage = self.env.num_obs
+        if hasattr(self.env.cfg.terrain, 'measure_heights') and self.env.cfg.terrain.measure_heights:
+            if hasattr(self.env.cfg.env, 'num_height_samples'):
+                obs_dim_for_storage += self.env.cfg.env.num_height_samples
+        
         self.alg.init_storage(
             self.env.num_envs,
             self.num_steps_per_env,
-            [self.env.num_obs],
+            [obs_dim_for_storage],
             [num_critic_obs],
             [self.env.obs_history_length * self.env.num_obs],
             [self.env.num_commands],
@@ -161,7 +175,7 @@ class OnPolicyRunner:
         for it in range(self.current_learning_iteration, tot_iter):
             start = time.time()
             # Rollout
-            with torch.inference_mode():
+            with torch.inference_mode():#使用 PyTorch 的上下文管理器
                 for i in range(self.num_steps_per_env):
                     actions = self.alg.act(obs, obs_history, commands, critic_obs)
                     # add critic_obs_buf to step returns, make sure it updates in every for loop

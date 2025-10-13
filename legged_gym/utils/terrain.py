@@ -66,8 +66,10 @@ class Terrain:
         self.tot_rows = int(cfg.num_rows * self.length_per_env_pixels) + 2 * self.border
 
         self.height_field_raw = np.zeros((self.tot_rows, self.tot_cols), dtype=np.int16)
+        
+        self.terrain_num = np.zeros(8, dtype=np.int16)
         if cfg.curriculum:
-            self.terrain_num = np.zeros(7, dtype=np.int16)
+            self.terrain_num = np.zeros(8, dtype=np.int16)
             self.curiculum()
         elif cfg.selected:
             self.selected_terrain()
@@ -170,16 +172,12 @@ class Terrain:
                 self.terrain_num[2] += 1
                 step_height *= -1
                 step_slope *= -1
-                step_width = (
-                    default_step_width
-                    * step_scale[int((self.terrain_num[2] - 1) / self.cfg.num_rows)]
-                )
+                scale_idx = min(int((self.terrain_num[2] - 1) / self.cfg.num_rows), len(step_scale) - 1)
+                step_width = default_step_width * step_scale[scale_idx]
             else:
                 self.terrain_num[3] += 1
-                step_width = (
-                    default_step_width
-                    * step_scale[int((self.terrain_num[3] - 1) / self.cfg.num_rows)]
-                )
+                scale_idx = min(int((self.terrain_num[3] - 1) / self.cfg.num_rows), len(step_scale) - 1)
+                step_width = default_step_width * step_scale[scale_idx]
             terrain_utils.pyramid_stairs_terrain(
                 terrain,
                 step_width=step_width,
@@ -244,18 +242,24 @@ def gap_terrain(terrain, gap_size, platform_size=1.0):
     gap_size = int(gap_size / terrain.horizontal_scale)
     platform_size = int(platform_size / terrain.horizontal_scale)
 
-    center_x = terrain.length // 2
-    center_y = terrain.width // 2
-    x1 = (terrain.length - platform_size) // 2
-    x2 = x1 + gap_size
-    y1 = (terrain.width - platform_size) // 2
-    y2 = y1 + gap_size
+    # height_field_raw 的形状是 (width, length)，对应 (行, 列)
+    center_x = terrain.width // 2   # 第一维索引（行）
+    center_y = terrain.length // 2  # 第二维索引（列）
+    
+    # 计算平台和间隙的半径
+    platform_half = platform_size // 2
+    gap_half = gap_size // 2
 
+    # 先将整个区域设为深坑
     terrain.height_field_raw[
-        center_x - x2 : center_x + x2, center_y - y2 : center_y + y2
+        max(0, center_x - gap_half) : min(terrain.width, center_x + gap_half),
+        max(0, center_y - gap_half) : min(terrain.length, center_y + gap_half)
     ] = -1000
+    
+    # 再在中心创建平台
     terrain.height_field_raw[
-        center_x - x1 : center_x + x1, center_y - y1 : center_y + y1
+        max(0, center_x - platform_half) : min(terrain.width, center_x + platform_half),
+        max(0, center_y - platform_half) : min(terrain.length, center_y + platform_half)
     ] = 0
 
 

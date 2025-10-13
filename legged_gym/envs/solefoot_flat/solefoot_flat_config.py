@@ -35,9 +35,15 @@ class BipedCfgSF(BaseConfig):
         num_envs = 8192
         # num_privileged_group = 0 # 4096
         # num_proprio_group = num_envs - num_privileged_group
-        num_observations = 36  # note: only proprioceptive observations with last action, does not include command and gait
-        num_critic_observations = 3 + num_observations # add lin_vel to the front
         num_height_samples = 117
+        num_observations = 36  # proprioceptive observations only (used for obs_history)
+        num_observations_with_heights = num_observations + num_height_samples  # 153 total when heights are included
+        num_critic_observations = 3 + num_observations + num_height_samples # add lin_vel (3) + proprioceptive (36) + heights (117) = 156
+        
+        # Control whether actor uses height measurements
+        # The old model Oct09_16-34-18_ was trained with heights, so keep this True
+        actor_use_heights = True  # If True: actor input = 153+3+5=161, If False: actor input = 36+3+5=44
+
         # num_privileged_obs = (
             # num_observations + 3 + 12 + num_height_samples + 6 + 20 + 6
         # )  # if not None a priviledge_obs_buf will be returned by step() (critic obs for assymetric training). None is returned otherwise
@@ -50,7 +56,7 @@ class BipedCfgSF(BaseConfig):
         fail_to_terminal_time_s = 0.5
 
     class terrain:
-        mesh_type = "plane"  # "heightfield" # none, plane, heightfield or trimesh
+        mesh_type = "trimesh"  # "heightfield" # none, plane, heightfield or trimesh
         horizontal_scale = 0.1  # [m]
         vertical_scale = 0.005  # [m]
         border_size = 25  # [m]
@@ -59,24 +65,12 @@ class BipedCfgSF(BaseConfig):
         dynamic_friction = 0.4
         restitution = 0.8
         # rough terrain only:
-        measure_heights = False
+        measure_heights = True
         critic_measure_heights = True
         measured_points_x = [
-            -0.6,
-            -0.5,
-            -0.4,
-            -0.3,
-            -0.2,
-            -0.1,
-            0.0,
-            0.1,
-            0.2,
-            0.3,
-            0.4,
-            0.5,
-            0.6,
-        ]  # 1mx1.6m rectangle (without center line)
-        measured_points_y = [-0.4, -0.3, -0.2, -0.1, 0.0, 0.1, 0.2, 0.3, 0.4]
+            0.05,0.10,0.15,0.20,0.25,0.30,0.35,0.40,0.45,0.50,0.55,0.60,0.65,
+        ]  #机器人正前方0.6*0.4=0.24m范围内的高度
+        measured_points_y = [-0.2, -0.15, -0.1, -0.05, 0.0, 0.05, 0.1, 0.15, 0.2]
         selected = False  # select a unique terrain type and pass all arguments
         terrain_kwargs = None  # Dict of arguments for selected terrain
         max_init_terrain_level = 5 + 4  # starting curriculum state
@@ -225,46 +219,46 @@ class BipedCfgSF(BaseConfig):
         thickness = 0.01
 
     class domain_rand:
-        randomize_friction = True
+        randomize_friction = True#启动摩擦系数随机化
         friction_range = [0.0, 1.6]
-        randomize_restitution = True
+        randomize_restitution = True#启动恢复系数随机化
         restitution_range = [0.0, 1.0]
-        randomize_base_mass = True
+        randomize_base_mass = True#启动基座质量随机化
         added_mass_range = [-0.5, 5]
-        randomize_base_com = True
-        rand_com_vec = [0.03, 0.02, 0.03]
+        randomize_base_com = True#启动基座质心随机化
+        rand_com_vec = [0.03, 0.02, 0.03]#基座质心范围
         randomize_inertia = True
-        randomize_inertia_range = [0.8, 1.2]
+        randomize_inertia_range = [0.8, 1.2]#惯性范围
         push_robots = True
-        push_interval_s = 7
-        max_push_vel_xy = 1.0
-        rand_force = False
+        push_interval_s = 7#推机器人间隔时间
+        max_push_vel_xy = 1.0#最大推动速度（水平方向）
+        rand_force = False#启动随机推力
         force_resampling_time_s = 15
-        max_force = 50.0
-        rand_force_curriculum_level = 0
-        randomize_Kp = True
-        randomize_Kp_range = [0.8, 1.2]
-        randomize_Kd = True
-        randomize_Kd_range = [0.8, 1.2]
-        randomize_motor_torque = True
+        max_force = 50.0#最大推力
+        rand_force_curriculum_level = 0#推力课程等级
+        randomize_Kp = True#随机比例项
+        randomize_Kp_range = [0.8, 1.2]#Kp范围
+        randomize_Kd = True#随机微分项Kd
+        randomize_Kd_range = [0.8, 1.2]#Kd范围
+        randomize_motor_torque = True#随机电机扭矩
         randomize_motor_torque_range = [0.8, 1.2]
-        randomize_default_dof_pos = True
+        randomize_default_dof_pos = True#随机默认关节位置
         randomize_default_dof_pos_range = [-0.05, 0.05]
-        randomize_action_delay = True
-        randomize_imu_offset = False
+        randomize_action_delay = True#动作延迟
+        randomize_imu_offset = False#IMU偏移
         delay_ms_range = [0, 20]
 
     class rewards:
         class scales:
             keep_balance = 1.0
 
-            tracking_lin_vel_x = 1.5
+            tracking_lin_vel_x = 4
             tracking_lin_vel_y = 1.5
             tracking_ang_vel = 1
 
             # regulation related rewards
-            base_height = -10
-            lin_vel_z = -0.5
+            base_height = -2
+            lin_vel_z = 0
             ang_vel_xy = -0.05
             torques = -0.00008
             dof_acc = -2.5e-7
@@ -411,7 +405,7 @@ class BipedCfgPPOSF(BaseConfig):
         policy_class_name = "ActorCritic"
         algorithm_class_name = "PPO"
         num_steps_per_env = 24  # per iteration
-        max_iterations = 10000  # number of policy updates
+        max_iterations = 20000  # number of policy updates
 
         # logging
         logger = "tensorboard"

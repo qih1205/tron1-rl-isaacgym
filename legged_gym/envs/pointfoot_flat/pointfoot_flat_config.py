@@ -36,7 +36,7 @@ robot_type = os.getenv("ROBOT_TYPE")
 class BipedCfgPF(BaseConfig):
     class env:
         num_envs = 8192
-        num_observations = 30
+        num_observations = 30 + 117
         num_critic_observations = 3 + num_observations
         num_height_samples = 117
         num_actions = 6
@@ -48,16 +48,16 @@ class BipedCfgPF(BaseConfig):
         fail_to_terminal_time_s = 0.5
 
     class terrain:
-        mesh_type = "plane"  # "heightfield" # none, plane, heightfield or trimesh
+        mesh_type = "trimesh"  # "heightfield" # none, plane, heightfield or trimesh
         horizontal_scale = 0.1  # [m]
         vertical_scale = 0.005  # [m]
         border_size = 25  # [m]
-        curriculum = True
+        curriculum = False
         static_friction = 0.4
         dynamic_friction = 0.4
         restitution = 0.8
         # rough terrain only:
-        measure_heights = False
+        measure_heights = True
         critic_measure_heights = True
         measured_points_x = [
             -0.6,
@@ -83,7 +83,7 @@ class BipedCfgPF(BaseConfig):
         num_rows = 10  # number of terrain rows (levels)
         num_cols = 20  # number of terrain cols (types)
         # terrain types: [smooth slope, rough slope, stairs up, stairs down, discrete]
-        terrain_proportions = [0.1, 0.1, 0.35, 0.25, 0.2]
+        terrain_proportions = [0.25, 0.2, 0.25, 0.2, 0.1]
         # trimesh only:
         slope_treshold = (
             0.75  # slopes above this threshold will be corrected to vertical surfaces
@@ -334,7 +334,7 @@ class BipedCfgPPOPF(BaseConfig):
 
     class MLP_Encoder:
         output_detach = True
-        num_input_dim = BipedCfgPF.env.num_observations * BipedCfgPF.env.obs_history_length
+        num_input_dim = 1470
         num_output_dim = 3
         hidden_dims = [256, 128]
         activation = "elu"

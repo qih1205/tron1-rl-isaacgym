@@ -62,6 +62,7 @@ class PPO:
         est_learning_rate=1.0e-3,
         ts_learning_rate=1.0e-4,
         critic_take_latent=False,
+        actor_use_heights=True,
         early_stop=False,
         anneal_lr=False,
         device="cpu",
@@ -76,6 +77,7 @@ class PPO:
         self.anneal_lr = anneal_lr
         self.vae_beta = vae_beta
         self.critic_take_latent = critic_take_latent
+        self.actor_use_heights = actor_use_heights
 
         self.encoder = encoder
 
@@ -135,8 +137,11 @@ class PPO:
         critic_obs = torch.cat((critic_obs, commands), dim=-1)
         # act
         encoder_out = self.encoder.encode(obs_history)
+        # Use full observations (including height measurements) for actor if enabled
+        # Otherwise use only proprioceptive observations (first 36 dims)
+        actor_obs = obs if self.actor_use_heights else obs[:, :36]
         self.transition.actions = self.actor_critic.act(
-            torch.cat((encoder_out, obs, commands), dim=-1)
+            torch.cat((encoder_out, actor_obs, commands), dim=-1)
         ).detach()
 
         # evaluate
@@ -203,9 +208,11 @@ class PPO:
         ) in generator:
             encoder_out_batch = self.encoder.encode(obs_history_batch)
             commands_batch = group_commands_batch
+            # Use full observations (including height measurements) for actor if enabled
+            actor_obs_batch = obs_batch if self.actor_use_heights else obs_batch[:, :36]
             self.actor_critic.act(
                 torch.cat(
-                    (encoder_out_batch, obs_batch, commands_batch),
+                    (encoder_out_batch, actor_obs_batch, commands_batch),
                     dim=-1,
                 )
             )

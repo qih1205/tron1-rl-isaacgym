@@ -79,6 +79,12 @@ def play(args):
         else to_torch([1.0, 0.0, 0.0], device=env.device) if robot_type == "WF_TRON1A" else to_torch([1.5, 0.0, 0.0, 0.0, 0.0])
     action_scale = env.cfg.control.action_scale_pos if robot_type == "WF_TRON1A"\
         else env.cfg.control.action_scale
+    
+    # Initialize measured_heights and compute observations before first call
+    if env.cfg.terrain.measure_heights or env.cfg.terrain.critic_measure_heights:
+        env.measured_heights = env._get_heights()
+    env.compute_observations()  # This will populate obs_buf with heights
+    
     obs, obs_history, commands, _ = env.get_observations()
     # load policy
     train_cfg.runner.resume = True
@@ -129,9 +135,14 @@ def play(args):
     # camera_direction = np.array(env_cfg.viewer.lookat) - np.array(env_cfg.viewer.pos)
     img_idx = 0
     est = None
+    # Check if actor uses height measurements (default to True for compatibility with models trained with heights)
+    actor_use_heights = getattr(env.cfg.env, 'actor_use_heights', True)
+    
     for i in range(10 * int(env.max_episode_length)):
         est = encoder(obs_history)
-        actions = policy(torch.cat((est, obs, commands), dim=-1).detach())
+        # Use full observations or only proprioceptive based on configuration
+        actor_obs = obs if actor_use_heights else obs[:, :36]
+        actions = policy(torch.cat((est, actor_obs, commands), dim=-1).detach())
 
         env.commands[:, :] = commands_val
 

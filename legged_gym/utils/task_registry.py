@@ -102,7 +102,7 @@ class TaskRegistry:
                 base_file_name = ntpath.basename(save_item)
                 copyfile(save_item, self.log_dir + "/" + base_file_name)
 
-    def make_env(self, name, args=None, env_cfg=None):
+    def make_env(self, name, args=None, env_cfg=None):#根据 --task 生成对应任务环境与配置
         """Creates an environment either from a registered namme or from the provided config file.
 
         Args:
@@ -117,31 +117,34 @@ class TaskRegistry:
             isaacgym.VecTaskPython: The created environment
             Dict: the corresponding config file
         """
-        # if no args passed get command line arguments
+        # 如果没有ARGS，获得命令行参数
         if args is None:
             args = get_args()
-        # check if there is a registered env with that name
+        # 检查是否存在该名称并已注册的env
         if name in self.task_classes:
-            task_class = self.get_task_class(name)
+            task_class = self.get_task_class(name)#获取类本身，相当于获取蓝图
         else:
             raise ValueError(f"Task with name: {name} was not registered")
         if env_cfg is None:
-            # load config files
+            # 加载环境类配置
             env_cfg, _ = self.get_cfgs(name)
         # override cfg from args (if specified)
         env_cfg, _ = update_cfg_from_args(env_cfg, None, args)
         set_seed(env_cfg.seed)
-        # parse sim params (convert to dict first)
-        sim_params = {"sim": class_to_dict(env_cfg.sim)}
-        sim_params = parse_sim_params(args, sim_params)
-        env = task_class(
-            cfg=env_cfg,
-            sim_params=sim_params,
-            physics_engine=args.physics_engine,
-            sim_device=args.sim_device,
-            headless=args.headless,
+        # 解析仿真参数（首先转换为字典）
+        sim_params = {"sim": class_to_dict(env_cfg.sim)}#将环境的仿真配置转为字典
+        sim_params = parse_sim_params(args, sim_params)#根据命令行参数更新仿真配置
+        env = task_class(#实例化过程，相当于根据蓝图建造实际的房子
+            cfg=env_cfg,#传入环境的完整配置
+            sim_params=sim_params,#传入仿真参数
+            physics_engine=args.physics_engine,#指定物理引擎类型（如 PhysX）
+            sim_device=args.sim_device,#指定仿真运行设备（如 GPU）
+            headless=args.headless,#是否以无头模式运行（无图形界面）
         )
         return env, env_cfg
+        #env：实例化好的环境对象
+        #env_cfg: 最终用于创建环境的配置对象
+        #这段代码根据配置和参数，创建并返回一个强化学习仿真环境实例。
 
     def make_alg_runner(
         self, env, name=None, args=None, train_cfg=None, log_root="default"

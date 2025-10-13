@@ -120,7 +120,7 @@ class BipedSF(BaseTask):
 
         self.compute_foot_state()
 
-        # compute observations, rewards, resets, ...。。。
+        # compute observations, rewards, resets, ...
         self.check_termination()
         self.compute_reward()
 
@@ -146,8 +146,16 @@ class BipedSF(BaseTask):
 
     def compute_observations(self):
         """Computes observations"""
-        self.obs_buf, self.critic_obs_buf = self.compute_self_observations()
-
+        proprioceptive_obs, critic_obs_buf_base = self.compute_self_observations()
+        
+        # Update observation history with proprioceptive observations only (no heights)
+        self.obs_history = torch.cat(
+            (self.obs_history[:, self.num_obs :], proprioceptive_obs), dim=-1
+        )
+        
+        # Build complete observation buffer
+        self.obs_buf = proprioceptive_obs.clone()
+        
         # add perceptive inputs if not blind
         if self.cfg.terrain.measure_heights:
             heights = (
@@ -159,16 +167,16 @@ class BipedSF(BaseTask):
                 * self.obs_scales.height_measurements
             )
             self.obs_buf = torch.cat((self.obs_buf, heights), dim=-1)
+            # Also add heights to critic observations
+            self.critic_obs_buf = torch.cat((critic_obs_buf_base, heights), dim=-1)
+        else:
+            self.critic_obs_buf = critic_obs_buf_base
 
         # add noise if needed
         if self.add_noise:
             self.obs_buf += (
                 2 * torch.rand_like(self.obs_buf) - 1
             ) * self.noise_scale_vec
-
-        self.obs_history = torch.cat(
-            (self.obs_history[:, self.num_obs :], self.obs_buf), dim=-1
-        )
 
     def _compute_torques(self, actions):
         """Compute torques from actions.
@@ -213,10 +221,16 @@ class BipedSF(BaseTask):
         Returns:
             [torch.Tensor]: Vector of scales used to multiply a uniform distribution in [-1, 1]
         """
-        noise_vec = torch.zeros_like(self.obs_buf[0])
         self.add_noise = self.cfg.noise.add_noise
         noise_scales = self.cfg.noise.noise_scales
         noise_level = self.cfg.noise.noise_level
+        
+        # Calculate the correct size for noise vector
+        noise_vec_size = self.num_obs
+        if self.cfg.terrain.measure_heights:
+            noise_vec_size += self.cfg.env.num_height_samples
+        
+        noise_vec = torch.zeros(noise_vec_size, device=self.device, dtype=torch.float)
         noise_vec[0:3] = (
             noise_scales.ang_vel * noise_level * self.obs_scales.ang_vel
         )
@@ -227,7 +241,10 @@ class BipedSF(BaseTask):
         noise_vec[14:22] = (
             noise_scales.dof_vel * noise_level * self.obs_scales.dof_vel
         )
-        noise_vec[22:] = 0.0  # previous actions
+        noise_vec[22:36] = 0.0  # previous actions, clock inputs, gaits
+        # Add noise for height measurements if enabled
+        if self.cfg.terrain.measure_heights:
+            noise_vec[36:] = noise_scales.height_measurements * noise_level * self.obs_scales.height_measurements if hasattr(noise_scales, 'height_measurements') else 0.0
         return noise_vec
 
     def _create_envs(self):
@@ -268,68 +285,102 @@ class BipedSF(BaseTask):
         self.num_dof = self.gym.get_asset_dof_count(robot_asset)
         self.num_bodies = self.gym.get_asset_rigid_body_count(robot_asset)
         dof_props_asset = self.gym.get_asset_dof_properties(robot_asset)
+        #gym.get_asset_dof_properties返回一个包含关节物理属性的命名数组
         rigid_shape_props_asset = self.gym.get_asset_rigid_shape_properties(robot_asset)
 
         # save body names from the asset
-        body_names = self.gym.get_asset_rigid_body_names(robot_asset)
-        self.dof_names = self.gym.get_asset_dof_names(robot_asset)
+        body_names = self.gym.get_asset_rigid_body_names(robot_asset)#从asset中获取机器人全部关节的名称，body_names是一个列表，列表中的每个元素是一个字符串，表示关节的名称
+        self.dof_names = self.gym.get_asset_dof_names(robot_asset)#从asset中获取自由度名称，前面加self说明是一个成员，会在类的其他方法中使用
         self.num_bodies = len(body_names)
         self.num_dofs = len(self.dof_names)
-        feet_names = [s for s in body_names if self.cfg.asset.foot_name in s]
+        feet_names = [s for s in body_names if self.cfg.asset.foot_name in s]#在body_names中找到所有包含foot的关节名称
         contact_names = []
-        if hasattr(self.cfg.asset, "contact_name"):
+        if hasattr(self.cfg.asset, "contact_name"):#如果body_names中包含contact_name，则将该关节名称添加到contact_names列表中
             contact_names = [s for s in body_names if self.cfg.asset.contact_name in s]
-        penalized_contact_names = []
+        penalized_contact_names = []#定义：这些关节如果接触，会受到惩罚
         for name in self.cfg.asset.penalize_contacts_on:
+            #遍历penalize_contacts_on列表，将列表中的每个元素在body_names中搜索，如果找到，则将该关节名称添加到penalized_contact_names列表中
             penalized_contact_names.extend([s for s in body_names if name in s])
-        termination_contact_names = []
+        termination_contact_names = []#定义：这些关节如果接触，会终止
         for name in self.cfg.asset.terminate_after_contacts_on:
+            #遍历terminate_after_contacts_on列表，将列表中的每个元素在body_names中搜索，如果找到，则将该关节名称添加到termination_contact_names列表中
             termination_contact_names.extend([s for s in body_names if name in s])
 
-        base_init_state_list = (
-            self.cfg.init_state.pos
-            + self.cfg.init_state.rot
-            + self.cfg.init_state.lin_vel
-            + self.cfg.init_state.ang_vel
+        base_init_state_list = (#将init_state的pos、rot、lin_vel、ang_vel拼接成一个列表
+            self.cfg.init_state.pos#位置
+            + self.cfg.init_state.rot#旋转
+            + self.cfg.init_state.lin_vel#线速度
+            + self.cfg.init_state.ang_vel#角速度
         )
-        self.base_init_state = to_torch(
+        self.base_init_state = to_torch(#将base_init_state_list转换为torch张量，并存储到self.base_init_state中
             base_init_state_list, device=self.device, requires_grad=False
         )
-        start_pose = gymapi.Transform()
-        start_pose.p = gymapi.Vec3(*self.base_init_state[:3])
+        start_pose = gymapi.Transform()#创建一个gymapi.Transform对象，并存储到start_pose中
+        #gymapi.Transform 包含两个主要属性：
+        #p：位置向量，类型为 gymapi.Vec3，表示在三维空间中的平移
+        #r：旋转四元数，类型为 gymapi.Quat，表示在三维空间中的旋转
+        #示例：
+        #transform = gymapi.Transform()
+        #transform.p = gymapi.Vec3(1.0, 0.0, 0.5)  # x=1.0, y=0.0, z=0.5
+        #transform.r = gymapi.Quat(0.0, 0.0, 0.0, 1.0)  # 单位四元数（无旋转）
+        start_pose.p = gymapi.Vec3(*self.base_init_state[:3])#将base_init_state的前3个元素作为位置存储到start_pose中，设置机器人的初始位置
 
-        self._get_env_origins()
+        self._get_env_origins()#设置环境（plane， heightfield， trimesh）的初始位置
         env_lower = gymapi.Vec3(0.0, 0.0, 0.0)
         env_upper = gymapi.Vec3(0.0, 0.0, 0.0)
         self.actor_handles = []
         self.envs = []
-        self.friction_coef = torch.zeros(
+        self.friction_coef = torch.zeros(#创建全0的张量，存储摩擦系数
             self.num_envs, dtype=torch.float, device=self.device, requires_grad=False
         )
-        self.restitution_coef = torch.zeros(
+        self.restitution_coef = torch.zeros(#创建全0的张量，存储恢复系数
             self.num_envs, dtype=torch.float, device=self.device, requires_grad=False
         )
-        self.base_mass = torch.zeros(
+        self.base_mass = torch.zeros(#创建全0的张量，存储基座质量
             self.num_envs, dtype=torch.float, device=self.device, requires_grad=False
         )
-        self.whole_body_mass = torch.zeros(
+        self.whole_body_mass = torch.zeros(#创建全0的张量，存储整个身体质量
             self.num_envs, dtype=torch.float, device=self.device, requires_grad=False
         )
-        self.base_com = torch.zeros(
+        self.base_com = torch.zeros(#创建全0的张量，形状为 (num_envs, 3)，3维坐标 (x, y, z)，存储基座质心
             self.num_envs, 3, dtype=torch.float, device=self.device, requires_grad=False
         )
         for i in range(self.num_envs):
             # create env instance
             env_handle = self.gym.create_env(
+                #gym.create_env 是 Isaac Gym 中用于创建仿真环境的核心函数。它负责在
+                #仿真器中创建一个独立的仿真环境实例。
+                #env_ptr = gym.create_env(sim, lower, upper, num_per_row)
+                #通过 gym.create_sim() 创建的仿真器对象，包含物理引擎和渲染上下文
+                #lower：定义环境在三维空间中的最小范围坐标
+                #upper：定义环境在三维空间中的最大范围坐标
+                #num_per_row：当创建多个环境时，指定网格布局中每行的环境数量
                 self.sim, env_lower, env_upper, int(np.sqrt(self.num_envs))
             )
             pos = self.env_origins[i].clone()
+            #env_origins 是包含所有环境初始位置的列表。每个元素是一个 3 维向量，表示对应环境在三维空间中的初始位置。 
             pos[:2] += torch_rand_float(-1.0, 1.0, (2, 1), device=self.device).squeeze(1)
+            #pos[:2] 表示取 pos 的前两个元素
+            #+= 表示将生成的随机浮点数添加到 pos 的前两个元素上
+            #torch_rand_float 是用于生成随机浮点数的函数。
+            #-1.0 和 1.0 是随机浮点数的范围
+            #(2, 1) 是形状参数，表示生成一个 2x1 的张量
+            #device=self.device 指定生成的张量存储在哪个设备上
+            #squeeze(1) 用于从张量中移除单维度的维度
             start_pose.p = gymapi.Vec3(*pos)
+            #gymapi.Vec3(*pos) 将 pos 转换为 gymapi.Vec3 类型，并存储到 start_pose 中
+            #实现为每个环境的初始位置添加随机偏移
+
             rigid_shape_props = self._process_rigid_shape_props(rigid_shape_props_asset, i)
+            #为每个环境分配不同的摩擦系数和恢复系数。
 
             self.gym.set_asset_rigid_shape_properties(robot_asset, rigid_shape_props)
+            #将上一行中处理后的属性更新到robot_asset上。
+
             actor_handle = self.gym.create_actor(
+                #功能是在指定的环境中创建一个机器人
+                #函数返回一个 actor_handle，这是角色的唯一标识符，后续所有对该角色的操作
+                #如设置关节属性、获取状态等都需要使用这个句柄。
                 env_handle,
                 robot_asset,
                 start_pose,
@@ -338,16 +389,27 @@ class BipedSF(BaseTask):
                 self.cfg.asset.self_collisions,
                 0,
             )
+            # cartpole_handle = self.gym.create_actor(
+            #     env_ptr,                    # 环境指针
+            #     cartpole_asset,             # 预加载的cartpole资源
+            #     pose,                       # 初始位姿，
+            #     "cartpole",                 # 角色名称，
+            #     i,                          # 环境索引作为分组ID，
+            #     1,                          # 碰撞过滤掩码，
+            #     0                           # 分割ID，
+            # )
             dof_props = self._process_dof_props(dof_props_asset, i)
+            #为每个环境设置不同的关节参数
             self.gym.set_actor_dof_properties(env_handle, actor_handle, dof_props)
+            #将上一行中处理后的关节参数同步更新到环境和机器人上。
             body_props = self.gym.get_actor_rigid_body_properties(
                 env_handle, actor_handle
-            )
-            body_props = self._process_rigid_body_props(body_props, i)
+            )#读取刚体属性并存入body_props
+            body_props = self._process_rigid_body_props(body_props, i)#修改刚体属性
             self.gym.set_actor_rigid_body_properties(
                 env_handle, actor_handle, body_props, recomputeInertia=True
-            )
-            self.envs.append(env_handle)
+            )#将修改后的刚体属性更新到环境和机器人上，并重新计算惯性张量
+            self.envs.append(env_handle)#
             self.actor_handles.append(actor_handle)
 
         self.feet_indices = torch.zeros(
@@ -540,10 +602,12 @@ class BipedSF(BaseTask):
         )
         # compute critic_obs_buf
         critic_obs_buf = torch.cat((
-            self.base_lin_vel * self.obs_scales.lin_vel, self.obs_buf), dim=-1)
+            self.base_lin_vel * self.obs_scales.lin_vel, obs_buf), dim=-1)
         return obs_buf, critic_obs_buf
 
     def get_observations(self):
+        # Return full observations (with heights) for storage
+        # Actor will extract proprioceptive part (first 36 dims)
         return (
             self.obs_buf,
             self.obs_history,
@@ -871,23 +935,78 @@ class BipedSF(BaseTask):
         return torch.where(self.commands[:, 4] == 0, reward / len(self.feet_indices), 0)
 
     def _reward_feet_distance(self):
-        # Penalize base height away from target
+        """惩罚双脚之间的水平距离过近
+        
+        这个奖励函数用于防止机器人双脚靠得太近而导致不稳定,
+        确保机器人保持足够的支撑底面积。不同模式下使用不同的惩罚策略。
+        
+        Returns:
+            torch.Tensor: 每个环境的惩罚值,形状为 (num_envs,)
+                         双脚距离越小于最小距离,惩罚越大
+        """
+        # 1. 计算双脚在水平面(xy平面)上的距离
+        # foot_positions[:, 0, :2] 是第一只脚的xy位置
+        # foot_positions[:, 1, :2] 是第二只脚的xy位置
+        # torch.norm 计算两点之间的欧几里得距离
         feet_distance = torch.norm(
             self.foot_positions[:, 0, :2] - self.foot_positions[:, 1, :2], dim=-1
         )
+        
+        # 2. 根据不同的模式返回不同的惩罚
+        # 条件判断: 站立模式(commands[:, 4] == 1) 且 目标高度较低(commands[:, 3] <= 0.3)
         return torch.where(
+            # 当机器人处于站立模式且蹲得较低时(高度≤0.3):
+            # 使用双向惩罚: |实际距离 - 最小距离|
+            # 这意味着既惩罚双脚太近,也惩罚双脚太远
+            # 裁剪到[0, 1]范围内,避免过大的惩罚值
             torch.logical_and(self.commands[:, 4] == 1, self.commands[:, 3] <= 0.3),
             torch.clip(torch.abs(self.cfg.rewards.min_feet_distance - feet_distance), 0, 1),
+            
+            # 其他情况(行走模式或站立时高度>0.3):
+            # 使用单向惩罚: max(0, 最小距离 - 实际距离)
+            # 只惩罚双脚太近的情况,不惩罚双脚太远
+            # 裁剪到[0, 1]范围内
             torch.clip(self.cfg.rewards.min_feet_distance - feet_distance, 0, 1),
         )
 
     def _reward_feet_regulation(self):
+        """惩罚脚部在接近地面时的水平滑动
+        
+        这个奖励函数用于防止机器人的脚在接近或接触地面时出现水平方向的滑动,
+        鼓励脚部在着地前减速并稳定接触,提高步态的稳定性和能量效率。
+        当脚越接近地面,惩罚越大。
+        
+        Returns:
+            torch.Tensor: 每个环境的惩罚值,形状为 (num_envs,)
+                         脚部越低且水平速度越大,惩罚越大
+        """
+        # 1. 定义"接近地面"的高度阈值
+        # 使用目标基座高度的2.5%作为参考高度
+        # 例如: 如果base_height_target=0.4m, 则feet_height=0.01m
         feet_height = self.cfg.rewards.base_height_target * 0.025
+        
+        # 2. 计算惩罚值
+        # 这个惩罚由两个因素的乘积组成:
         reward = torch.sum(
+            # 因子1: exp(-foot_heights / feet_height)
+            # 这是一个高度权重函数,当脚部高度接近0时,权重接近1
+            # 当脚部离地面越远,权重呈指数衰减,接近0
+            # 意味着只在脚部接近地面时才进行惩罚
             torch.exp(-self.foot_heights / feet_height)
+            
+            # 因子2: ||foot_velocities_xy||^2
+            # foot_velocities[:, :, :2] 是脚部在xy平面的速度(水平速度)
+            # torch.norm 计算水平速度的大小
+            # torch.square 计算速度的平方,使惩罚对大速度更敏感
             * torch.square(torch.norm(self.foot_velocities[:, :, :2], dim=-1)),
+            
+            # 对所有脚部求和(双足机器人有2只脚)
             dim=1,
         )
+        
+        # 3. 返回惩罚值
+        # 当脚部接近地面且仍有较大的水平速度时,惩罚最大
+        # 鼓励机器人在脚着地前减小水平速度,实现平稳着地
         return reward
 
     def _reward_power(self):
@@ -901,19 +1020,39 @@ class BipedSF(BaseTask):
         reward = torch.sum(
             torch.norm(
                 self.contact_forces[:, self.penalised_contact_indices, :], dim=-1
-            )
-            > 1.0,
+            )            > 1.0,
             dim=1,
         )
         return reward
 
     def _reward_base_height(self):
-        # Penalize base height away from target
+        """惩罚机器人基座高度偏离目标值
+        
+        这个奖励函数用于控制机器人保持特定的基座高度,确保机器人在
+        行走或站立时不会蹲得太低或站得太高。该函数在所有模式下都激活。
+        
+        Returns:
+            torch.Tensor: 每个环境的惩罚值,形状为 (num_envs,)
+                         偏离目标高度越大,惩罚越大
+        """
+        # 1. 计算基座相对于地形的实际高度
+        # root_states[:, 2] 是基座在世界坐标系下的z坐标
+        # measured_heights 是脚下地形的高度采样点(多个采样点的平均值)
+        # 两者相减并取平均值得到基座离地的实际高度
         base_height = torch.mean(
             self.root_states[:, 2].unsqueeze(1) - self.measured_heights, dim=1
         )
-        # reward = torch.square(base_height - self.commands[:, 3])
-        reward = torch.abs(base_height - self.cfg.rewards.base_height_target)
+        
+        # 2. 计算高度误差作为惩罚
+        # cfg.rewards.base_height_target 是配置文件中设定的目标基座高度
+        # 使用绝对值误差: |实际高度 - 目标高度|
+        # 注释掉的平方误差: (实际高度 - 目标高度)^2 会对大偏差给予更严厉的惩罚
+        # reward = torch.square(base_height - self.commands[:, 3])  # 使用命令高度(站立模式的动态目标)
+        reward = torch.abs(base_height - self.cfg.rewards.base_height_target)  # 使用固定目标高度
+        
+        # 3. 返回惩罚值
+        # 注释掉的代码: 在站立模式(commands[:, 4] == 1)时会给予1.5倍的惩罚
+        # 当前实现: 对所有模式(行走和站立)统一使用相同的惩罚
         # return torch.where(self.commands[:, 4] == 0, reward, reward * 1.5)
         return reward
 
@@ -934,10 +1073,33 @@ class BipedSF(BaseTask):
         )
 
     def _reward_relative_feet_height_tracking(self):
+        """奖励机器人在站立模式下跟踪双脚相对于身体的目标高度
+        
+        这个奖励函数用于控制机器人在站立状态时保持特定的脚部高度,
+        可以实现蹲起等动作。只在站立模式(commands[:, 4] == 1)时激活。
+        
+        Returns:
+            torch.Tensor: 每个环境的奖励值,形状为 (num_envs,)
+                         误差越小奖励越高,最大值为1(完全匹配)
+        """
+        # 1. 计算基座相对于地形的高度
+        # root_states[:, 2] 是基座在世界坐标系下的z坐标
+        # measured_heights 是脚下地形的高度采样点
+        # 两者相减并取平均值得到基座离地高度
         base_height = torch.mean(
             self.root_states[:, 2].unsqueeze(1) - self.measured_heights, dim=1
         )
+        
+        # 2. 计算双脚在身体坐标系下的高度
+        # base_height - foot_heights = 脚相对于基座的高度(向上为正)
+        # 形状: (num_envs, num_feet)
         feet_height_in_body_frame = base_height.view(self.num_envs, 1) - self.foot_heights
+        
+        # 3. 使用高斯函数将跟踪误差转换为奖励
+        # commands[:, 3] 是目标的双脚相对高度命令
+        # 计算双脚高度与目标高度的平方误差和
+        # 通过 exp(-error/sigma) 将误差映射到 [0, 1] 范围
+        # 误差为0时奖励为1,误差越大奖励越接近0
         reward = torch.exp(
             -torch.sum(
                 torch.square(
@@ -945,6 +1107,10 @@ class BipedSF(BaseTask):
                 ),
                 dim=-1) / self.cfg.rewards.height_tracking_sigma
         )
+        
+        # 4. 只在站立静止模式时给予奖励
+        # commands[:, 4] == 1 表示机器人处于站立模式
+        # 其他模式(如行走)时奖励为0
         return torch.where(self.commands[:, 4] == 1, reward, 0)
 
     def _reward_zero_command_nominal_state(self):
