@@ -120,7 +120,7 @@ class BipedSF(BaseTask):
 
         self.compute_foot_state()
 
-        # compute observations, rewards, resets, ...
+        # compute observations, rewards, resets, ...。。。
         self.check_termination()
         self.compute_reward()
 
