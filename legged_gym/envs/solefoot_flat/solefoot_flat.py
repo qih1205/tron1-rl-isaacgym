@@ -84,6 +84,12 @@ class BipedSF(BaseTask):
             self.set_camera(self.cfg.viewer.pos, self.cfg.viewer.lookat)
         self._init_buffers()
         self._prepare_reward_function()
+        
+        # 初始化奖励函数用的高度观测值
+        self.reward_points_x = self.cfg.terrain.reward_measure_point_x
+        self.reward_points_y = self.cfg.terrain.reward_measure_point_y
+        self.reward_heights = 0  # 初始化为0，后续会在_post_physics_step_callback中更新
+        
         self.init_done = True
 
     def post_physics_step(self):
@@ -641,9 +647,9 @@ class BipedSF(BaseTask):
 
         if self.cfg.terrain.measure_heights or self.cfg.terrain.critic_measure_heights:
             self.measured_heights = self._get_heights()
-
+            self.reward_heights = self._get_heights(reward=True)
         self.base_height = torch.mean(
-            self.root_states[:, 2].unsqueeze(1) - self.measured_heights, dim=1
+            self.root_states[:, 2].unsqueeze(1) - self.reward_heights, dim=1
         )
 
     def _step_contact_targets(self):
@@ -991,7 +997,7 @@ class BipedSF(BaseTask):
             # 因子1: exp(-foot_heights / feet_height)
             # 这是一个高度权重函数,当脚部高度接近0时,权重接近1
             # 当脚部离地面越远,权重呈指数衰减,接近0
-            # 意味着只在脚部接近地面时才进行惩罚
+            # 意味着只在脚部接近地面时进行惩罚
             torch.exp(-self.foot_heights / feet_height)
             
             # 因子2: ||foot_velocities_xy||^2
@@ -1040,7 +1046,7 @@ class BipedSF(BaseTask):
         # measured_heights 是脚下地形的高度采样点(多个采样点的平均值)
         # 两者相减并取平均值得到基座离地的实际高度
         base_height = torch.mean(
-            self.root_states[:, 2].unsqueeze(1) - self.measured_heights, dim=1
+            self.root_states[:, 2].unsqueeze(1) - self.reward_heights, dim=1
         )
         
         # 2. 计算高度误差作为惩罚
@@ -1087,7 +1093,7 @@ class BipedSF(BaseTask):
         # measured_heights 是脚下地形的高度采样点
         # 两者相减并取平均值得到基座离地高度
         base_height = torch.mean(
-            self.root_states[:, 2].unsqueeze(1) - self.measured_heights, dim=1
+            self.root_states[:, 2].unsqueeze(1) - self.reward_heights, dim=1
         )
         
         # 2. 计算双脚在身体坐标系下的高度

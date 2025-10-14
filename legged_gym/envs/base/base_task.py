@@ -410,54 +410,71 @@ class BaseTask:
             self.termination_contact_indices[i] = self.gym.find_actor_rigid_body_handle(
                 self.envs[0], self.actor_handles[0], termination_contact_names[i]
             )
-            
-    def _get_heights(self, env_ids=None):
-        """Samples heights of the terrain at required points around each robot.
-            The points are offset by the base's position and rotated by the base's yaw
 
-        Args:
-            env_ids (List[int], optional): Subset of environments for which to return the heights. Defaults to None.
-
-        Raises:
-            NameError: [description]
-
-        Returns:
-            [type]: [description]
-        """
+    def _get_heights(self, env_ids=None, reward=False):
+        # 根据reward参数选择采样点
+        if reward:
+            points_x = torch.tensor(self.reward_points_x, device=self.device)
+            points_y = torch.tensor(self.reward_points_y, device=self.device)
+        else:
+            points_x = torch.tensor(self.cfg.terrain.measured_points_x, device=self.device)
+            points_y = torch.tensor(self.cfg.terrain.measured_points_y, device=self.device)
+        
+        # 计算采样点数量
+        num_points = len(points_x) * len(points_y)
+        
         if self.cfg.terrain.mesh_type == "plane":
             return torch.zeros(
                 self.num_envs,
-                self.num_height_points,
+                num_points,
                 device=self.device,
                 requires_grad=False,
             )
         elif self.cfg.terrain.mesh_type == "none":
             raise NameError("Can't measure height with terrain mesh type 'none'")
 
-        if env_ids:
-            points = quat_apply_yaw(
-                self.base_quat[env_ids].repeat(1, self.num_height_points),
-                self.height_points[env_ids],
-            ) + (self.root_states[env_ids, :3]).unsqueeze(1)
+        # 生成网格采样点
+        mesh_x, mesh_y = torch.meshgrid(points_x, points_y, indexing='ij')
+        mesh_points = torch.stack([mesh_x.flatten(), mesh_y.flatten()], dim=-1)
+        
+        # 获取机器人基座位置和方向
+        if env_ids is not None:
+            base_xy = self.root_states[env_ids, :2]
+            base_quat = self.base_quat[env_ids]
         else:
-            points = quat_apply_yaw(
-                self.base_quat.repeat(1, self.num_height_points), self.height_points
-            ) + (self.root_states[:, :3]).unsqueeze(1)
-
-        points += self.terrain.cfg.border_size
+            base_xy = self.root_states[:, :2]
+            base_quat = self.base_quat
+        
+        base_yaw = torch.atan2(
+            2.0 * (base_quat[:, 0] * base_quat[:, 3] + base_quat[:, 1] * base_quat[:, 2]),
+            1.0 - 2.0 * (base_quat[:, 2] ** 2 + base_quat[:, 3] ** 2)
+        )
+        cos_yaw = torch.cos(base_yaw)
+        sin_yaw = torch.sin(base_yaw)
+        rot = torch.stack([cos_yaw, -sin_yaw, sin_yaw, cos_yaw], dim=-1).view(-1, 2, 2)
+        # einsum: rot[batch, i, j] @ mesh_points[k, j] -> points[batch, k, i]
+        # 我们想要的是 points[batch, k, 2]，所以应该是 'bij,kj->bki'
+        points = torch.einsum('bij,kj->bki', rot, mesh_points)
+        points = points + base_xy.unsqueeze(1)
+        points = points + self.terrain.cfg.border_size
         points = (points / self.terrain.cfg.horizontal_scale).long()
-        px = points[:, :, 0].view(-1)
-        py = points[:, :, 1].view(-1)
+        px = points[:, :, 0].reshape(-1)
+        py = points[:, :, 1].reshape(-1)
         px = torch.clip(px, 0, self.height_samples.shape[0] - 2)
         py = torch.clip(py, 0, self.height_samples.shape[1] - 2)
-
         heights1 = self.height_samples[px, py]
         heights2 = self.height_samples[px + 1, py]
         heights3 = self.height_samples[px, py + 1]
         heights = torch.min(heights1, heights2)
         heights = torch.min(heights, heights3)
-
-        return heights.view(self.num_envs, -1) * self.terrain.cfg.vertical_scale
+        
+        # 根据env_ids确定返回的形状
+        if env_ids is not None:
+            num_envs_to_return = len(env_ids)
+        else:
+            num_envs_to_return = self.num_envs
+        
+        return heights.view(num_envs_to_return, -1) * self.terrain.cfg.vertical_scale
     
     def _process_rigid_shape_props(self, props, env_id):
         """Callback allowing to store/change/randomize the rigid shape properties of each environment.

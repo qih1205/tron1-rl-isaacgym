@@ -65,10 +65,13 @@ class BipedCfgSF(BaseConfig):
         dynamic_friction = 0.4
         restitution = 0.8
         # rough terrain only:
+        #设计一个高度场，特供给奖励函数用，机器人正下方0.3*0.3区域，间隔0.1
+        reward_measure_point_x = [-0.15, -0.05, 0.05, 0.15]
+        reward_measure_point_y = [-0.15, -0.05, 0.05, 0.15]
         measure_heights = True
         critic_measure_heights = True
         measured_points_x = [
-            -0.05, 0.00, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 
+            0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65
         ]  #机器人正前方0.6*0.4=0.24m范围内的高度
         measured_points_y = [-0.2, -0.15, -0.1, -0.05, 0.0, 0.05, 0.1, 0.15, 0.2]
         selected = False  # select a unique terrain type and pass all arguments
@@ -89,6 +92,7 @@ class BipedCfgSF(BaseConfig):
         high_horizontal_scale = 0.01
         edge_width_thresh_up = 0.18
         edge_width_thresh_down = 0.05
+
 
     class commands:
         curriculum = False
