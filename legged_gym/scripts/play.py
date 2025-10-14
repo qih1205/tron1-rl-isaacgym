@@ -76,7 +76,7 @@ def play(args):
     # get robot_type
     robot_type = os.getenv("ROBOT_TYPE")
     commands_val = to_torch([0.5, 0.0, 0, 0], device=env.device) if robot_type.startswith("PF")\
-        else to_torch([1.0, 0.0, 0.0], device=env.device) if robot_type == "WF_TRON1A" else to_torch([1.5, 0.0, 0.0, 0.0, 0.0])
+        else to_torch([1.0, 0.0, 0.0], device=env.device) if robot_type == "WF_TRON1A" else to_torch([1.0, 0.0, 0.0, 0.0, 0.0])
     action_scale = env.cfg.control.action_scale_pos if robot_type == "WF_TRON1A"\
         else env.cfg.control.action_scale
     

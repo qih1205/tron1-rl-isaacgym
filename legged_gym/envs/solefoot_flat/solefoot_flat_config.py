@@ -32,7 +32,7 @@ from legged_gym.envs.base.base_config import BaseConfig
 
 class BipedCfgSF(BaseConfig):
     class env:
-        num_envs = 8192
+        num_envs = 2048
         # num_privileged_group = 0 # 4096
         # num_proprio_group = num_envs - num_privileged_group
         num_height_samples = 117
@@ -68,7 +68,7 @@ class BipedCfgSF(BaseConfig):
         measure_heights = True
         critic_measure_heights = True
         measured_points_x = [
-            0.05,0.10,0.15,0.20,0.25,0.30,0.35,0.40,0.45,0.50,0.55,0.60,0.65,
+            -0.05, 0.00, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 
         ]  #机器人正前方0.6*0.4=0.24m范围内的高度
         measured_points_y = [-0.2, -0.15, -0.1, -0.05, 0.0, 0.05, 0.1, 0.15, 0.2]
         selected = False  # select a unique terrain type and pass all arguments
@@ -252,9 +252,9 @@ class BipedCfgSF(BaseConfig):
         class scales:
             keep_balance = 1.0
 
-            tracking_lin_vel_x = 4
+            tracking_lin_vel_x = 3.5
             tracking_lin_vel_y = 1.5
-            tracking_ang_vel = 1
+            tracking_ang_vel = 1#############
 
             # regulation related rewards
             base_height = -2
