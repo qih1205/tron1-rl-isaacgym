@@ -50,7 +50,7 @@ class BipedCfgSF(BaseConfig):
         fail_to_terminal_time_s = 0.5
 
     class terrain:
-        mesh_type = "plane"  # "heightfield" # none, plane, heightfield or trimesh
+        mesh_type = "trimesh"  # "heightfield" # none, plane, heightfield or trimesh
         horizontal_scale = 0.1  # [m]
         vertical_scale = 0.005  # [m]
         border_size = 25  # [m]
@@ -117,7 +117,7 @@ class BipedCfgSF(BaseConfig):
             # lin_vel_y = [-1.7, 1.7]  # min max [m/s]
             ang_vel_yaw = [-1, 1]  # min max [rad/s]
             heading = [-3.14159, 3.14159]
-            base_height = [0.68, 0.78] # [0.40, 0.56] # TODO: lower than previous height
+            base_height = [0.75, 0.80] # [0.40, 0.56] # TODO: lower than previous height
             stand_still = [0, 1]
 
     class gait:
@@ -297,8 +297,8 @@ class BipedCfgSF(BaseConfig):
         )
         soft_dof_vel_limit = 1.0
         soft_torque_limit = 0.8
-        base_height_target = 0.75 # 0.56 # lower than previous height
-        feet_height_target = 0.10
+        base_height_target = 0.78 # 0.56 # lower than previous height
+        feet_height_target = 0.2
         min_feet_distance = 0.20
         max_contact_force = 100.0  # forces above this value are penalized
         kappa_gait_probs = 0.05
