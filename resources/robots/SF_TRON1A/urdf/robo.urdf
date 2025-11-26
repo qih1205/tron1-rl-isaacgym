@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<robot name="SF_TRON1">
+<robot name="point_foot">
     <material name="black">
         <color rgba="0.0 0.0 0.0 1.0"/>
     </material>
@@ -68,7 +68,7 @@
                     rpy="0 0 0"/>
             <geometry>
                 <mesh
-                        filename="package://robot_description/pointfoot/SF_TRON1A/meshes/base_Link.STL"/>
+                        filename="/home/qi/limx_rl/pointfoot-legged-gym/resources/robots/SF_TRON1A/meshes/base_Link.STL"/>
             </geometry>
             <material
                     name="">
@@ -127,7 +127,7 @@
                     rpy="0 0 0"/>
             <geometry>
                 <mesh
-                        filename="package://robot_description/pointfoot/SF_TRON1A/meshes/abad_L_Link.STL"/>
+                        filename="/home/qi/limx_rl/pointfoot-legged-gym/resources/robots/SF_TRON1A/meshes/abad_L_Link.STL"/>
             </geometry>
             <material
                     name="">
@@ -170,7 +170,7 @@
                     rpy="0 0 0"/>
             <geometry>
                 <mesh
-                        filename="package://robot_description/pointfoot/SF_TRON1A/meshes/hip_L_Link.STL"/>
+                        filename="/home/qi/limx_rl/pointfoot-legged-gym/resources/robots/SF_TRON1A/meshes/hip_L_Link.STL"/>
             </geometry>
             <material
                     name="">
@@ -213,7 +213,7 @@
                     rpy="0 0 0"/>
             <geometry>
                 <mesh
-                        filename="package://robot_description/pointfoot/SF_TRON1A/meshes/knee_L_Link.STL"/>
+                        filename="/home/qi/limx_rl/pointfoot-legged-gym/resources/robots/SF_TRON1A/meshes/knee_L_Link.STL"/>
             </geometry>
             <material
                     name="">
@@ -256,7 +256,7 @@
                     rpy="0 0 0"/>
             <geometry>
                 <mesh
-                        filename="package://robot_description/pointfoot/SF_TRON1A/meshes/ankle_L_Link.STL"/>
+                        filename="/home/qi/limx_rl/pointfoot-legged-gym/resources/robots/SF_TRON1A/meshes/ankle_L_Link.STL"/>
             </geometry>
             <material
                     name="">
@@ -270,7 +270,7 @@
                     rpy="0 0 0"/>
             <geometry>
                 <mesh
-                        filename="package://robot_description/pointfoot/SF_TRON1A/meshes/ankle_L_Link.STL"/>
+                        filename="/home/qi/limx_rl/pointfoot-legged-gym/resources/robots/SF_TRON1A/meshes/ankle_L_Link.STL"/>
             </geometry>
             <material
                     name="">
@@ -373,7 +373,7 @@
                     rpy="0 0 0"/>
             <geometry>
                 <mesh
-                        filename="package://robot_description/pointfoot/SF_TRON1A/meshes/abad_R_Link.STL"/>
+                        filename="/home/qi/limx_rl/pointfoot-legged-gym/resources/robots/SF_TRON1A/meshes/abad_R_Link.STL"/>
             </geometry>
             <material
                     name="">
@@ -416,7 +416,7 @@
                     rpy="0 0 0"/>
             <geometry>
                 <mesh
-                        filename="package://robot_description/pointfoot/SF_TRON1A/meshes/hip_R_Link.STL"/>
+                        filename="/home/qi/limx_rl/pointfoot-legged-gym/resources/robots/SF_TRON1A/meshes/hip_R_Link.STL"/>
             </geometry>
             <material
                     name="">
@@ -459,7 +459,7 @@
                     rpy="0 0 0"/>
             <geometry>
                 <mesh
-                        filename="package://robot_description/pointfoot/SF_TRON1A/meshes/knee_R_Link.STL"/>
+                        filename="/home/qi/limx_rl/pointfoot-legged-gym/resources/robots/SF_TRON1A/meshes/knee_R_Link.STL"/>
             </geometry>
             <material
                     name="">
@@ -502,7 +502,7 @@
                     rpy="0 0 0"/>
             <geometry>
                 <mesh
-                        filename="package://robot_description/pointfoot/SF_TRON1A/meshes/ankle_R_Link.STL"/>
+                        filename="/home/qi/limx_rl/pointfoot-legged-gym/resources/robots/SF_TRON1A/meshes/ankle_R_Link.STL"/>
             </geometry>
             <material
                     name="">
@@ -516,7 +516,7 @@
                     rpy="0 0 0"/>
             <geometry>
                 <mesh
-                        filename="package://robot_description/pointfoot/SF_TRON1A/meshes/ankle_R_Link.STL"/>
+                        filename="/home/qi/limx_rl/pointfoot-legged-gym/resources/robots/SF_TRON1A/meshes/ankle_R_Link.STL"/>
             </geometry>
             <material
                     name="">
@@ -541,6 +541,227 @@
         <limit effort="20" lower="-1.15191730631626" upper="1.5707963267949" velocity="15"/>
         <dynamics friction="0.01"/>
     </joint>
+
+    <!-- arm base adapter plate -->
+    <joint name="airbot_arm_base_joint" type="fixed">
+        <origin rpy="0. 0. 0." xyz="0.00166 0 0.0195"/>
+        <parent link="base_Link"/>
+        <child link="airbot_arm_base"/>
+    </joint>
+    <gazebo reference="airbot_arm_base_joint">
+        <disableFixedJointLumping>true</disableFixedJointLumping>
+    </gazebo>
+
+    <link name="airbot_arm_base">
+        <inertial>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <mass value="0.17" />
+            <inertia ixx="0.00044301" ixy="0" ixz="0" iyy="0.00035087" iyz="0" izz="0.00079287" />
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <box size="0.15 0.15 0.006"/>
+            </geometry>
+        </visual>
+        
+    </link>
+
+    <joint name="airbot_arm_joint" type="fixed">
+        <origin rpy="0. 0. 0." xyz="0.0245 0. 0.003"/>
+        <parent link="airbot_arm_base"/>
+        <child link="airbot_arm"/>
+    </joint>
+    <gazebo reference="airbot_arm_joint">
+        <disableFixedJointLumping>true</disableFixedJointLumping>
+    </gazebo>
+    <link name="airbot_arm">
+        <inertial>
+            <origin xyz="-0.010729 -0.00017015 0.041712" rpy="0 0 0" />
+            <mass value="0.77705" />
+            <inertia ixx="0.0008453" ixy="-7.4E-06" ixz="2.06E-05" iyy="0.0011821" iyz="-6.4E-06" izz="0.0012442" />
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="/home/qi/limx_rl/pointfoot-legged-gym/resources/robots/SF_TRON1A/meshes/airbot_arm.STL" />
+            </geometry>
+            <material name="">
+                <color rgba="0.75294 0.75294 0.75294 1" />
+            </material>
+        </visual>
+        <!-- <collision>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="package://wheel_quadruped_arm_robot_description/meshes/airbot_arm/airbot_arm.STL" />
+            </geometry>
+        </collision> -->
+    </link>
+    <link name="link1">
+        <inertial>
+            <origin xyz="6.9854E-05 -0.0018033 -0.0040245" rpy="0 0 0" />
+            <mass value="0.5571" />
+            <inertia ixx="0.0003647" ixy="-2E-07" ixz="-1.4E-06" iyy="0.0002944" iyz="1.1E-06" izz="0.0003449" />
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="/home/qi/limx_rl/pointfoot-legged-gym/resources/robots/SF_TRON1A/meshes/link1.STL" />
+            </geometry>
+            <material name="">
+                <color rgba="0.89804 0.91765 0.92941 1" />
+            </material>
+        </visual>
+        <!-- <collision>
+            <origin xyz="0.07 0 0.05" rpy="0 0.3 0" />
+            <geometry>
+                <box size="0.05 0.05 0.05"/>
+            </geometry>
+        </collision> -->
+
+    </link>
+    <joint name="J1" type="fixed">
+        <origin xyz="0 0 0.1172" rpy="0 0 0" />
+        <parent link="airbot_arm" />
+        <child link="link1" />
+    </joint>
+    <link name="link2">
+        <inertial>
+            <origin xyz="0.22493 0.0047721 0.008023" rpy="0 0 0" />
+            <mass value="0.64621" />
+            <inertia ixx="0.0004901" ixy="-0.0002434" ixz="-0.0005229" iyy="0.0051052" iyz="2.95E-05" izz="0.0050391" />
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="/home/qi/limx_rl/pointfoot-legged-gym/resources/robots/SF_TRON1A/meshes/link2.STL" />
+            </geometry>
+            <material name="">
+                <color rgba="0.75294 0.75294 0.75294 1" />
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0.1 0.02 0.0" rpy="0.0 0 0.2" />
+            <geometry>
+                <box size="0.2 0.04 0.04"/>
+                <!-- <mesh filename="/home/qi/limx_rl/pointfoot-legged-gym/resources/robots/SF_TRON1A/meshes/link2.STL" /> -->
+            </geometry>
+        </collision>
+    </link>
+    <joint name="J2" type="fixed">
+        <origin xyz="0 0 0" rpy="1.5708 -2.7549 0" />
+        <parent link="link1" />
+        <child link="link2" />
+    </joint>
+    <link name="link3">
+        <inertial>
+            <origin xyz="-0.00037204 0.16316 0.0024748" rpy="0 0 0" />
+            <mass value="0.28804" />
+            <inertia ixx="0.0026161" ixy="1.32E-05" ixz="1E-06" iyy="0.0002222" iyz="-8.17E-05" izz="0.0025516" />
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="/home/qi/limx_rl/pointfoot-legged-gym/resources/robots/SF_TRON1A/meshes/link3.STL" />
+            </geometry>
+            <material name="">
+                <color rgba="0.75294 0.75294 0.75294 1" />
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0.0 0.15 0" rpy="0 0 0" />
+            <geometry>
+                <box size="0.04 0.35 0.04"/>
+            </geometry>
+        </collision>
+    </link>
+    <joint name="J3" type="fixed">
+        <origin xyz="0.27009 0 0" rpy="0 0 1.9575" />
+        <parent link="link2" />
+        <child link="link3" />
+    </joint>
+    <link name="link4">
+        <inertial>
+            <origin xyz="5.2436E-06 0.00040412 -0.03228" rpy="0 0 0" />
+            <mass value="0.34876" />
+            <inertia ixx="0.0049818" ixy="7E-07" ixz="-0.0001276" iyy="0.0050587" iyz="3.18E-05" izz="0.0003503" />
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="/home/qi/limx_rl/pointfoot-legged-gym/resources/robots/SF_TRON1A/meshes/link4.STL" />
+            </geometry>
+            <material name="">
+                <color rgba="1 1 1 1" />
+            </material>
+        </visual>
+        <!-- <collision>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <box size="0.25 0.05 0.05"/>
+            </geometry>
+        </collision> -->
+    </link>
+    <joint name="J4" type="fixed">
+        <origin xyz="0 0.30854 0" rpy="-1.5708 -1.5708 0" />
+        <parent link="link3" />
+        <child link="link4" />
+    </joint>
+    <link name="link5">
+        <inertial>
+            <origin xyz="8.333E-06 0.026148 0.002525" rpy="0 0 0" />
+            <mass value="0.36132" />
+            <inertia ixx="0.0004677" ixy="0" ixz="0" iyy="0.0001825" iyz="-3.29E-05" izz="0.0004286" />
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="/home/qi/limx_rl/pointfoot-legged-gym/resources/robots/SF_TRON1A/meshes/link5.STL" />
+            </geometry>
+            <material name="">
+                <color rgba="0.89804 0.91765 0.92941 1" />
+            </material>
+        </visual>
+        <!-- <collision>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <box size="0.25 0.05 0.05"/>
+            </geometry>
+        </collision> -->
+    </link>
+    <joint name="J5" type="fixed">
+        <origin xyz="0 0 0" rpy="1.5708 0 0" />
+        <parent link="link4" />
+        <child link="link5" />
+    </joint>
+    <link name="link6">
+        <inertial>
+            <origin xyz="1.9522E-06 -0.002582 -0.13382" rpy="0 0 0" />
+            <mass value="0.65361" />
+            <inertia ixx="0.0029561" ixy="-6E-07" ixz="2.1E-06" iyy="0.0025189" iyz="0.000241" izz="0.0021828" />
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="/home/qi/limx_rl/pointfoot-legged-gym/resources/robots/SF_TRON1A/meshes/link6.STL" />
+            </geometry>
+            <material name="">
+                <color rgba="0.69804 0.69804 0.69804 1" />
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0 0.0 -0.07" rpy="0 0 0" />
+            <geometry>
+                <box size="0.08 0.04 0.1"/>
+            </geometry>
+        </collision>
+    </link>
+    <joint name="J6" type="fixed">
+        <origin xyz="0 0.26145 0" rpy="-1.5708 0 0" />
+        <parent link="link5" />
+        <child link="link6" />
+    </joint>
+
     <gazebo reference="hip_R_Link">
         <mu1>0.2</mu1>
         <mu2>0.2</mu2>
@@ -603,6 +824,57 @@
             <mechanicalReduction>1</mechanicalReduction>
         </actuator>
     </transmission>
+
+    <!-- limx arm -->
+    <gazebo reference="airbot_arm_base">
+        <mu1>0.2</mu1>
+        <mu2>0.2</mu2>
+        <self_collide>1</self_collide>
+        <material>Gazebo/Orange</material>
+    </gazebo>
+
+    <gazebo reference="airbot_arm">
+        <mu1>0.2</mu1>
+        <mu2>0.2</mu2>
+        <self_collide>1</self_collide>
+        <material>Gazebo/DarkGrey</material>
+    </gazebo>
+    <gazebo reference="L1">
+        <mu1>0.2</mu1>
+        <mu2>0.2</mu2>
+        <self_collide>1</self_collide>
+        <material>Gazebo/DarkGrey</material>
+    </gazebo>
+    <gazebo reference="L2">
+        <mu1>0.2</mu1>
+        <mu2>0.2</mu2>
+        <material>Gazebo/DarkGrey</material>
+        <self_collide>1</self_collide>
+    </gazebo>
+    <gazebo reference="L3">
+        <mu1>0.2</mu1>
+        <mu2>0.2</mu2>
+        <self_collide>1</self_collide>
+        <material>Gazebo/DarkGrey</material>
+    </gazebo>
+    <gazebo reference="L4">
+        <mu1>0.2</mu1>
+        <mu2>0.2</mu2>
+        <self_collide>1</self_collide>
+        <material>Gazebo/DarkGrey</material>
+    </gazebo>
+    <gazebo reference="L5">
+        <mu1>0.2</mu1>
+        <mu2>0.2</mu2>
+        <self_collide>1</self_collide>
+        <material>Gazebo/DarkGrey</material>
+    </gazebo>
+    <gazebo reference="L6">
+        <mu1>0.2</mu1>
+        <mu2>0.2</mu2>
+        <self_collide>1</self_collide>
+        <material>Gazebo/DarkGrey</material>
+    </gazebo>
 
     <!-- ****************************************** D435 Camera ******************************************************** -->
     <!-- <joint name="d435_joint" type="fixed">

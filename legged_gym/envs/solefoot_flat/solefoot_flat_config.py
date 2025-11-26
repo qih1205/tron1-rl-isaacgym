@@ -54,7 +54,7 @@ class BipedCfgSF(BaseConfig):
         horizontal_scale = 0.1  # [m]
         vertical_scale = 0.005  # [m]
         border_size = 25  # [m]
-        curriculum = True
+        curriculum = False  # 关闭课程训练
         static_friction = 0.4
         dynamic_friction = 0.4
         restitution = 0.8
@@ -77,15 +77,26 @@ class BipedCfgSF(BaseConfig):
             0.6,
         ]  # 1mx1.6m rectangle (without center line)
         measured_points_y = [-0.4, -0.3, -0.2, -0.1, 0.0, 0.1, 0.2, 0.3, 0.4]
-        selected = False  # select a unique terrain type and pass all arguments
-        terrain_kwargs = None  # Dict of arguments for selected terrain
+        selected = True  # 使用固定地形参数
+        # 直线楼梯参数: 2节楼梯，单节高度15cm，宽度30cm
+        terrain_kwargs = {
+            "type": "straight_stairs_terrain",
+            "terrain_kwargs": {
+                "step_width": 0.30,    # 30cm 宽度
+                "step_height": 0.15,   # 15cm 高度
+                "num_steps": 2,        # 2节楼梯
+                "direction": "forward", # 沿x轴方向
+                "smooth_transition": True,  # 启用平滑过渡
+                "transition_width": 1.5     # 过渡斜坡宽度1.5m
+            }
+        }
         max_init_terrain_level = 5 + 4  # starting curriculum state
         terrain_length = 8.0
         terrain_width = 8.0
         num_rows = 10  # number of terrain rows (levels)
         num_cols = 20  # number of terrain cols (types)
         # terrain types: [smooth slope, rough slope, stairs up, stairs down, discrete]
-        terrain_proportions = [0.1, 0.1, 0.35, 0.25, 0.2]
+        terrain_proportions = [0.0, 0.0, 0.5, 0.5, 0.0]  # 只保留楼梯地形(备用)
         # trimesh only:
         slope_treshold = (
             0.75  # slopes above this threshold will be corrected to vertical surfaces
@@ -111,7 +122,7 @@ class BipedCfgSF(BaseConfig):
         zero_command_prob = 0.8
 
         class ranges:
-            lin_vel_x = [-1.0, 1.5]  # min max [m/s]
+            lin_vel_x = [-0.5, 0.8]  # min max [m/s]
             lin_vel_y = [-1.0, 1.0]  # min max [m/s]
             # lin_vel_x = [-1.7, 1.7]  # min max [m/s]
             # lin_vel_y = [-1.7, 1.7]  # min max [m/s]
@@ -132,7 +143,7 @@ class BipedCfgSF(BaseConfig):
             # frequencies = [2, 2]
             # offsets = [0.5, 0.5]
             durations = [0.5, 0.5]
-            swing_height = [0.10, 0.20] # [0.0, 0.1]
+            swing_height = [0.15, 0.27] # [0.0, 0.1]
 
     class init_state:
         pos = [0.0, 0.0, 0.8]  # x,y,z [m]
@@ -200,7 +211,7 @@ class BipedCfgSF(BaseConfig):
         force_duration_s = 3.0  # 施加外力的持续时间
 
     class asset:
-        file = "{LEGGED_GYM_ROOT_DIR}/resources/robots/SF_TRON1A/urdf/robot.urdf"
+        file = "{LEGGED_GYM_ROOT_DIR}/resources/robots/SF_TRON1A/urdf/robo.urdf"
         name = "pointfoot_flat"
         foot_name = "ankle"
         foot_radius = 0.00
@@ -258,13 +269,13 @@ class BipedCfgSF(BaseConfig):
         class scales:
             keep_balance = 1.0
 
-            tracking_lin_vel_x = 1.5
+            tracking_lin_vel_x = 5
             tracking_lin_vel_y = 1.5
             tracking_ang_vel = 1
 
             # regulation related rewards
-            base_height = -10
-            lin_vel_z = -0.5
+            base_height = -5
+            lin_vel_z = 0.5
             ang_vel_xy = -0.05
             torques = -0.00008
             dof_acc = -2.5e-7
@@ -274,17 +285,17 @@ class BipedCfgSF(BaseConfig):
             action_smooth = -0.01
             orientation = -5.0
             feet_distance = -100
-            feet_regulation = -0.05
+            feet_regulation = -0.15
             tracking_contacts_shaped_force = -2.0
             tracking_contacts_shaped_vel = -2.0
-            tracking_contacts_shaped_height = -2.0
+            tracking_contacts_shaped_height = -4.0
             feet_contact_forces = -0.002
             ankle_torque_limits = -0.1
             power = -2e-4
-            relative_feet_height_tracking = 1.0
+            relative_feet_height_tracking = 4.0
             zero_command_nominal_state = -10.0
             keep_ankle_pitch_zero_in_air = 1.0
-            foot_landing_vel = -10.0
+            foot_landing_vel = -25.0
 
         only_positive_rewards = False  # if true negative total rewards are clipped at zero (avoids early termination problems)
         clip_reward = 100
@@ -297,9 +308,9 @@ class BipedCfgSF(BaseConfig):
         )
         soft_dof_vel_limit = 1.0
         soft_torque_limit = 0.8
-        base_height_target = 0.78 # 0.56 # lower than previous height
-        feet_height_target = 0.2
-        min_feet_distance = 0.20
+        base_height_target = 0.80 # 0.56 # lower than previous height
+        feet_height_target = 0.25
+        min_feet_distance = 0.18
         max_contact_force = 100.0  # forces above this value are penalized
         kappa_gait_probs = 0.05
         gait_force_sigma = 25.0
@@ -417,7 +428,7 @@ class BipedCfgPPOSF(BaseConfig):
         logger = "tensorboard"
         exptid = ""
         wandb_project = "legged_gym_SF"
-        save_interval = 500  # check for potential saves every this many iterations
+        save_interval = 200  # check for potential saves every this many iterations
         experiment_name = "SF_TRON1A"
         run_name = ""
         # load and resume

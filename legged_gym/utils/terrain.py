@@ -106,6 +106,7 @@ class Terrain:
 
     def selected_terrain(self):
         terrain_type = self.cfg.terrain_kwargs.pop("type")
+        terrain_params = self.cfg.terrain_kwargs.get("terrain_kwargs", {})
         for k in range(self.cfg.num_sub_terrains):
             # Env coordinates in the world
             (i, j) = np.unravel_index(k, (self.cfg.num_rows, self.cfg.num_cols))
@@ -114,11 +115,11 @@ class Terrain:
                 "terrain",
                 width=self.width_per_env_pixels,
                 length=self.width_per_env_pixels,
-                vertical_scale=self.vertical_scale,
-                horizontal_scale=self.horizontal_scale,
+                vertical_scale=self.cfg.vertical_scale,
+                horizontal_scale=self.cfg.horizontal_scale,
             )
 
-            eval(terrain_type)(terrain, **self.cfg.terrain_kwargs.terrain_kwargs)
+            eval(terrain_type)(terrain, **terrain_params)
             self.add_terrain_to_map(terrain, i, j)
 
     def make_terrain(self, choice, difficulty):
@@ -267,3 +268,87 @@ def pit_terrain(terrain, depth, platform_size=1.0):
     y1 = terrain.width // 2 - platform_size
     y2 = terrain.width // 2 + platform_size
     terrain.height_field_raw[x1:x2, y1:y2] = -depth
+
+
+def straight_stairs_terrain(terrain, step_width, step_height, num_steps=3, direction="forward", smooth_transition=True, transition_width=0.5):
+    """
+    生成直线楼梯地形（非金字塔形）
+    地形开头有斜坡从上一块平台下降到平地，楼梯放在中后部，末端有平台
+    
+    Args:
+        terrain: SubTerrain 对象
+        step_width: 单节楼梯宽度 [m]
+        step_height: 单节楼梯高度 [m]，正值为上楼梯，负值为下楼梯
+        num_steps: 楼梯节数
+        direction: 楼梯方向，"forward" 沿x轴，"sideways" 沿y轴
+        smooth_transition: 是否使用斜坡过渡连接地形块
+        transition_width: 过渡斜坡宽度 [m]
+    """
+    step_width_pixels = int(step_width / terrain.horizontal_scale)
+    step_height_pixels = int(step_height / terrain.vertical_scale)
+    transition_pixels = int(transition_width / terrain.horizontal_scale)
+    final_height = num_steps * step_height_pixels
+    
+    if direction == "forward":
+        # ========== 地形开头：从上一块的平台高度下降到平地 ==========
+        if smooth_transition and transition_pixels > 0:
+            # 开头的下降斜坡
+            for t in range(min(transition_pixels, terrain.length)):
+                # 从 final_height 过渡到 0
+                alpha = t / max(1, transition_pixels)
+                interp_height = int(final_height * (1 - alpha))
+                terrain.height_field_raw[t, :] = interp_height
+            slope_end = transition_pixels
+        else:
+            slope_end = 0
+        
+        # ========== 中间：平地区域 ==========
+        # 平地从斜坡结束到楼梯开始
+        start_x = int(terrain.length * 0.5)  # 楼梯从50%位置开始，留更多平地
+        terrain.height_field_raw[slope_end:start_x, :] = 0
+        
+        # ========== 楼梯 ==========
+        for i in range(num_steps):
+            x_start = start_x + i * step_width_pixels
+            x_end = x_start + step_width_pixels
+            height = (i + 1) * step_height_pixels
+            
+            x_start = max(slope_end, x_start)
+            x_end = min(terrain.length, x_end)
+            
+            if x_start < x_end:
+                terrain.height_field_raw[x_start:x_end, :] = height
+        
+        # ========== 楼梯之后：平台 ==========
+        stair_end_x = min(start_x + num_steps * step_width_pixels, terrain.length)
+        if stair_end_x < terrain.length:
+            terrain.height_field_raw[stair_end_x:, :] = final_height
+                
+    else:
+        # 楼梯沿y轴方向
+        if smooth_transition and transition_pixels > 0:
+            for t in range(min(transition_pixels, terrain.width)):
+                alpha = t / max(1, transition_pixels)
+                interp_height = int(final_height * (1 - alpha))
+                terrain.height_field_raw[:, t] = interp_height
+            slope_end = transition_pixels
+        else:
+            slope_end = 0
+        
+        start_y = int(terrain.width * 0.5)
+        terrain.height_field_raw[:, slope_end:start_y] = 0
+        
+        for i in range(num_steps):
+            y_start = start_y + i * step_width_pixels
+            y_end = y_start + step_width_pixels
+            height = (i + 1) * step_height_pixels
+            
+            y_start = max(slope_end, y_start)
+            y_end = min(terrain.width, y_end)
+            
+            if y_start < y_end:
+                terrain.height_field_raw[:, y_start:y_end] = height
+        
+        stair_end_y = min(start_y + num_steps * step_width_pixels, terrain.width)
+        if stair_end_y < terrain.width:
+            terrain.height_field_raw[:, stair_end_y:] = final_height

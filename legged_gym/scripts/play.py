@@ -53,11 +53,11 @@ def play(args):
     env_cfg.env.episode_length_s = 30
     env_cfg.env.num_envs = min(env_cfg.env.num_envs, 100)
 
-    env_cfg.terrain.num_rows = 10
-    env_cfg.terrain.num_cols = 20
-    env_cfg.terrain.terrain_proportions = [0.1, 0.1, 0.35, 0.25, 0.2]
-    env_cfg.terrain.max_init_terrain_level = 4
-    env_cfg.terrain.curriculum = True
+    # env_cfg.terrain.num_rows = 10
+    # env_cfg.terrain.num_cols = 20
+    # env_cfg.terrain.terrain_proportions = [0.1, 0.1, 0.35, 0.25, 0.2]
+    # env_cfg.terrain.max_init_terrain_level = 4
+    # env_cfg.terrain.curriculum = True
     env_cfg.noise.add_noise = True
     env_cfg.noise.noise_level = 0.5
     env_cfg.domain_rand.randomize_friction = False
