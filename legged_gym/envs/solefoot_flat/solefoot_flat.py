@@ -535,6 +535,7 @@ class BipedSF(BaseTask):
                 self.clock_inputs_sin.view(self.num_envs, 1),
                 self.clock_inputs_cos.view(self.num_envs, 1),
                 self.gaits,
+                torch.zeros(self.num_envs, 9, dtype=torch.float, device=self.device),
             ),
             dim=-1,
         )

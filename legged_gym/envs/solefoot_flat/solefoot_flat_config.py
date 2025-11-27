@@ -35,7 +35,7 @@ class BipedCfgSF(BaseConfig):
         num_envs = 8192
         # num_privileged_group = 0 # 4096
         # num_proprio_group = num_envs - num_privileged_group
-        num_observations = 36  # note: only proprioceptive observations with last action, does not include command and gait
+        num_observations = 36 + 9 # note: only proprioceptive observations with last action, does not include command and gait
         num_critic_observations = 3 + num_observations # add lin_vel to the front
         num_height_samples = 117
         # num_privileged_obs = (
